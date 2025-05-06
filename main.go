@@ -228,11 +228,9 @@ func init() {
 				log.Fatalln("Failed to init storage:", err)
 			}
 			defer storage.Close()
-
 			if err := storage.Set("access_token", args[0]); err != nil {
 				log.Fatalln("Failed to store access token:", err)
 			}
-
 			fmt.Println("Access token saved.")
 			return nil
 		},
@@ -248,12 +246,64 @@ func init() {
 				log.Fatalln("Failed to init storage:", err)
 			}
 			defer storage.Close()
-
 			if err := storage.Set("refresh_token", args[0]); err != nil {
 				log.Fatalln("Failed to store refresh token:", err)
 			}
-
 			fmt.Println("Refresh token saved.")
+			return nil
+		},
+	})
+	tokenCmd.AddCommand(&cobra.Command{
+		Use:   "get-access [token]",
+		Short: "Get existing access token to local synexis command line tool",
+		Long:  `Get existing access token to local synexis command line tool`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			storage := NewStorage()
+			if err := storage.Init(); err != nil {
+				log.Fatalln("Failed to init storage:", err)
+			}
+			defer storage.Close()
+			result, err := storage.Get("access_token")
+			if err != nil {
+				log.Fatalln("Failed to store access token:", err)
+			}
+			fmt.Println(result)
+			return nil
+		},
+	})
+	tokenCmd.AddCommand(&cobra.Command{
+		Use:   "get-refresh [token]",
+		Short: "Get existing refresh token to local synexis command line tool",
+		Long:  `Get existing refresh token to local synexis command line tool`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			storage := NewStorage()
+			if err := storage.Init(); err != nil {
+				log.Fatalln("Failed to init storage:", err)
+			}
+			defer storage.Close()
+			result, err := storage.Get("refresh_token")
+			if err != nil {
+				log.Fatalln("Failed to store access token:", err)
+			}
+			fmt.Println(result)
+			return nil
+		},
+	})
+	tokenCmd.AddCommand(&cobra.Command{
+		Use:   "refresh",
+		Short: "Refresh access token and refresh token",
+		Long:  `Refresh access token and refresh token`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			storage := NewStorage()
+			if err := storage.Init(); err != nil {
+				log.Fatalln("Failed to init storage:", err)
+			}
+			defer storage.Close()
+			result, err := storage.Get("refresh_token")
+			if err != nil {
+				log.Fatalln("Failed to store access token:", err)
+			}
+			fmt.Println(result)
 			return nil
 		},
 	})
