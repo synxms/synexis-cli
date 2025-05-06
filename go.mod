@@ -3,6 +3,7 @@ module github.com/synexism/synexis
 go 1.24.2
 
 require (
+	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/spf13/cobra v1.9.1
 	go.etcd.io/bbolt v1.4.0
 )

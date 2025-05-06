@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/spf13/cobra"
 	"go.etcd.io/bbolt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"time"
 )
 
 type (
@@ -112,10 +114,13 @@ func (s *storage) Close() {
 type (
 	Authentication interface {
 		GenerateLoginWithGoogle() (*LoginResponse, error)
+		GenerateAccessAndRefreshToken(refresh string) (*ResponseRefresh, error)
 		OpenDefaultBrowser(url string) error
+		IsExpired(jwtString string) (*string, *string, error)
 	}
 	authentication struct {
 		loginEndpoint         string
+		refreshEndpoint       string
 		contentTypeJsonHeader string
 	}
 	LoginResponse struct {
@@ -123,31 +128,70 @@ type (
 		ResponseMessage string `json:"responseMessage"`
 		RedirectURL     string `json:"redirectUrl"`
 	}
+	ResponseRefresh struct {
+		ResponseCode    string `json:"responseCode"`
+		ResponseMessage string `json:"responseMessage"`
+		Refresh         string `json:"refresh"`
+		Access          string `json:"access"`
+	}
 )
 
 func NewAuthentication() Authentication {
+	const baseUrl = "http://localhost:2343"
 	return &authentication{
 		contentTypeJsonHeader: "application/json",
-		loginEndpoint:         "http://localhost:2343/api/v1/authentication/login",
+		loginEndpoint:         fmt.Sprintf("%s/api/v1/authentication/login", baseUrl),
+		refreshEndpoint:       fmt.Sprintf("%s/api/v1/authentication/refresh", baseUrl),
 	}
 }
 
 func (a *authentication) GenerateLoginWithGoogle() (*LoginResponse, error) {
-	resp, err := http.Post(a.loginEndpoint, a.contentTypeJsonHeader, bytes.NewBuffer([]byte("{}")))
+	req, err := http.NewRequest("POST", a.loginEndpoint, bytes.NewBuffer([]byte("{}")))
 	if err != nil {
-		return nil, errors.New("failed to contact authentication server")
+		return nil, errors.New("failed to create request")
+	}
+	req.Header.Set("Content-Type", a.contentTypeJsonHeader)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, errors.New("failed to contact server")
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			panic("failed to contact authentication server")
+			panic("failed to close response body")
 		}
 	}(resp.Body)
 	var loginResp LoginResponse
 	if err := json.NewDecoder(resp.Body).Decode(&loginResp); err != nil {
-		return nil, errors.New("failed to contact authentication server")
+		return nil, errors.New("failed to contact server")
 	}
 	return &loginResp, nil
+}
+
+func (a *authentication) GenerateAccessAndRefreshToken(refresh string) (*ResponseRefresh, error) {
+	req, err := http.NewRequest("POST", a.refreshEndpoint, bytes.NewBuffer([]byte("{}")))
+	if err != nil {
+		return nil, errors.New("failed to create request")
+	}
+	req.Header.Set("Content-Type", a.contentTypeJsonHeader)
+	req.Header.Set("Authorization", "Bearer "+refresh)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, errors.New("failed to contact server")
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			panic("failed to close response body")
+		}
+	}(resp.Body)
+	var refreshResp ResponseRefresh
+	if err := json.NewDecoder(resp.Body).Decode(&refreshResp); err != nil {
+		return nil, errors.New("failed to contact server")
+	}
+	return &refreshResp, nil
 }
 
 func (a *authentication) OpenDefaultBrowser(url string) error {
@@ -159,6 +203,27 @@ func (a *authentication) OpenDefaultBrowser(url string) error {
 	default:
 		return exec.Command("xdg-open", url).Start()
 	}
+}
+
+func (a *authentication) IsExpired(jwtString string) (*string, *string, error) {
+	parser := jwt.NewParser()
+	claims := jwt.MapClaims{}
+	_, _, err := parser.ParseUnverified(jwtString, claims)
+	if err != nil {
+		return nil, nil, errors.New("invalid token")
+	}
+	exp, ok := claims["exp"].(float64)
+	if !ok {
+		return nil, nil, errors.New("no expiration field in token")
+	}
+	expTime := time.Unix(int64(exp), 0)
+	now := time.Now()
+	expiredAt := expTime.Format(time.DateTime)
+	totalRemains := expTime.Sub(now).String()
+	if now.After(expTime) {
+		return &totalRemains, &expiredAt, errors.New("token is expired")
+	}
+	return &totalRemains, &expiredAt, nil
 }
 
 var (
@@ -191,9 +256,13 @@ func init() {
 				log.Fatalln(err.Error())
 			}
 			if result != nil {
-				err := authenticationService.OpenDefaultBrowser(result.RedirectURL)
-				if err != nil {
-					log.Fatalln(err.Error())
+				if result.ResponseCode == "00" {
+					err := authenticationService.OpenDefaultBrowser(result.RedirectURL)
+					if err != nil {
+						log.Fatalln(err.Error())
+					}
+				} else {
+					fmt.Println("Authentication failed.")
 				}
 			}
 			return nil
@@ -254,7 +323,7 @@ func init() {
 		},
 	})
 	tokenCmd.AddCommand(&cobra.Command{
-		Use:   "get-access [token]",
+		Use:   "get-access",
 		Short: "Get existing access token to local synexis command line tool",
 		Long:  `Get existing access token to local synexis command line tool`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -272,7 +341,7 @@ func init() {
 		},
 	})
 	tokenCmd.AddCommand(&cobra.Command{
-		Use:   "get-refresh [token]",
+		Use:   "get-refresh",
 		Short: "Get existing refresh token to local synexis command line tool",
 		Long:  `Get existing refresh token to local synexis command line tool`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -299,11 +368,77 @@ func init() {
 				log.Fatalln("Failed to init storage:", err)
 			}
 			defer storage.Close()
-			result, err := storage.Get("refresh_token")
+			refreshToken, err := storage.Get("refresh_token")
 			if err != nil {
 				log.Fatalln("Failed to store access token:", err)
 			}
-			fmt.Println(result)
+			authenticationService := NewAuthentication()
+			result, err := authenticationService.GenerateAccessAndRefreshToken(refreshToken)
+			if err != nil {
+				log.Fatalln(err.Error())
+			}
+			if result != nil {
+				if result.ResponseCode == "00" {
+					if err := storage.Set("refresh_token", result.Refresh); err != nil {
+						log.Fatalln("Failed to store refresh token:", err)
+					}
+					if err := storage.Set("access_token", result.Access); err != nil {
+						log.Fatalln("Failed to store access token:", err)
+					}
+					fmt.Println("Renewed Refresh token saved.")
+					fmt.Println("Renewed Access token saved.")
+				} else {
+					fmt.Println("Refresh Token failed.")
+				}
+			}
+			return nil
+		},
+	})
+	tokenCmd.AddCommand(&cobra.Command{
+		Use:   "expired-check",
+		Short: "Refresh access token and Refresh token expired check",
+		Long:  `Refresh access token and Refresh token expired check`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			storage := NewStorage()
+			if err := storage.Init(); err != nil {
+				log.Fatalln("Failed to init storage:", err)
+			}
+			defer storage.Close()
+			refreshToken, err := storage.Get("refresh_token")
+			if err != nil {
+				log.Fatalln("Failed to store refresh token:", err)
+			}
+			accessToken, err := storage.Get("access_token")
+			if err != nil {
+				log.Fatalln("Failed to store access token:", err)
+			}
+			authenticationService := NewAuthentication()
+			refreshTokenRemaining, refreshTokenExpiredAt, err := authenticationService.IsExpired(refreshToken)
+			if err != nil {
+				if errors.Is(err, errors.New("token is expired")) {
+					fmt.Println("Refresh token expired")
+				}
+				if !errors.Is(err, errors.New("token is expired")) {
+					fmt.Println("Refresh token checking error")
+				}
+			}
+			if refreshTokenRemaining != nil && refreshTokenExpiredAt != nil {
+				fmt.Println("Refresh token remaining: " + *refreshTokenRemaining)
+				fmt.Println("Refresh token expired at: " + *refreshTokenExpiredAt)
+			}
+			accessTokenRemaining, accessTokenExpiredAt, err := authenticationService.IsExpired(accessToken)
+			if err != nil {
+				if errors.Is(err, errors.New("token is expired")) {
+					fmt.Println("Access token expired")
+				}
+				if !errors.Is(err, errors.New("token is expired")) {
+					fmt.Println("Access token checking error")
+				}
+			}
+			if accessTokenRemaining != nil && accessTokenExpiredAt != nil {
+				fmt.Println("Access token remaining: " + *accessTokenRemaining)
+				fmt.Println("Access token expired at: " + *accessTokenExpiredAt)
+			}
 			return nil
 		},
 	})
