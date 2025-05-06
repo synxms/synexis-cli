@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang-jwt/jwt/v4"
-	guuid "github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"go.etcd.io/bbolt"
 	"io"
@@ -17,7 +16,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 )
 
@@ -297,11 +295,35 @@ func init() {
 		Long:  `Generate api key for accessing sentinel model`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// SYX[3 alphabet uppercase]-[5 random]-[10 random unique string]-[uuid without strips]
+
+			// get access token
+			storage := NewStorage()
+			if err := storage.Init(); err != nil {
+				log.Fatalln("Failed to init storage:", err)
+			}
+			defer storage.Close()
+			accessToken, err := storage.Get("access_token")
+			if err != nil {
+				log.Fatalln("Failed to store access token:", err)
+			}
+
+			// retrieve company id
+			parser := jwt.NewParser()
+			claims := jwt.MapClaims{}
+			_, _, err = parser.ParseUnverified(accessToken, claims)
+			if err != nil {
+				return errors.New("invalid token")
+			}
+			companyId, ok := claims["companyId"].(string)
+			if !ok {
+				return errors.New("no company id field in token")
+			}
+
 			const apiKeyFormat = "SYX%s-%s-%s-%s"
 			upperCaseRandom := RandomStringUpperCase(3)
 			fiveUniqueRandom := RandomString(5)
 			tenUniqueRandom := RandomString(10)
-			uuidWithoutStrip := strings.Replace(guuid.NewString(), "-", "", -1)
+			uuidWithoutStrip := companyId
 			fmt.Println(fmt.Sprintf(apiKeyFormat, upperCaseRandom, fiveUniqueRandom, tenUniqueRandom, uuidWithoutStrip))
 			return nil
 		},
