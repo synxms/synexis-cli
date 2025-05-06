@@ -133,13 +133,15 @@ type (
 	Authentication interface {
 		GenerateLoginWithGoogle() (*LoginResponse, error)
 		GenerateAccessAndRefreshToken(refresh string) (*ResponseRefresh, error)
+		GenerateAPIKeySentinel(prefix, validationLayerOne, validationLayerTwo, access string) (*ResponseRefresh, error)
 		OpenDefaultBrowser(url string) error
 		IsExpired(jwtString string) (*string, *string, error)
 	}
 	authentication struct {
-		loginEndpoint         string
-		refreshEndpoint       string
-		contentTypeJsonHeader string
+		loginEndpoint          string
+		refreshEndpoint        string
+		generateAPIKeyEndpoint string
+		contentTypeJsonHeader  string
 	}
 	LoginResponse struct {
 		ResponseCode    string `json:"responseCode"`
@@ -157,9 +159,10 @@ type (
 func NewAuthentication() Authentication {
 	const baseUrl = "http://localhost:2343"
 	return &authentication{
-		contentTypeJsonHeader: "application/json",
-		loginEndpoint:         fmt.Sprintf("%s/api/v1/authentication/login", baseUrl),
-		refreshEndpoint:       fmt.Sprintf("%s/api/v1/authentication/refresh", baseUrl),
+		contentTypeJsonHeader:  "application/json",
+		loginEndpoint:          fmt.Sprintf("%s/api/v1/authentication/login", baseUrl),
+		refreshEndpoint:        fmt.Sprintf("%s/api/v1/authentication/refresh", baseUrl),
+		generateAPIKeyEndpoint: fmt.Sprintf("%s/api/v1/authentication/create/apikey", baseUrl),
 	}
 }
 
@@ -185,6 +188,39 @@ func (a *authentication) GenerateLoginWithGoogle() (*LoginResponse, error) {
 		return nil, errors.New("failed to contact server")
 	}
 	return &loginResp, nil
+}
+
+func (a *authentication) GenerateAPIKeySentinel(prefix, validationLayerOne, validationLayerTwo, access string) (*ResponseRefresh, error) {
+	dataRequest := map[string]interface{}{}
+	dataRequest["prefix"] = prefix
+	dataRequest["validationLayerOne"] = validationLayerOne
+	dataRequest["validationLayerTwo"] = validationLayerTwo
+	dataRequestBytes, err := json.Marshal(dataRequest)
+	if err != nil {
+		return nil, errors.New("failed to marshal request")
+	}
+	req, err := http.NewRequest("POST", a.generateAPIKeyEndpoint, bytes.NewBuffer(dataRequestBytes))
+	if err != nil {
+		return nil, errors.New("failed to create request")
+	}
+	req.Header.Set("Content-Type", a.contentTypeJsonHeader)
+	req.Header.Set("Authorization", "Bearer "+access)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, errors.New("failed to contact server")
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			panic("failed to close response body")
+		}
+	}(resp.Body)
+	var refreshResp ResponseRefresh
+	if err := json.NewDecoder(resp.Body).Decode(&refreshResp); err != nil {
+		return nil, errors.New("failed to contact server")
+	}
+	return &refreshResp, nil
 }
 
 func (a *authentication) GenerateAccessAndRefreshToken(refresh string) (*ResponseRefresh, error) {
@@ -295,7 +331,7 @@ func init() {
 		Long:  `Generate api key for accessing sentinel model`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// SYX[3 alphabet uppercase]-[5 random]-[10 random unique string]-[uuid without strips]
-
+			authenticationService := NewAuthentication()
 			// get access token
 			storage := NewStorage()
 			if err := storage.Init(); err != nil {
@@ -320,11 +356,20 @@ func init() {
 			}
 
 			const apiKeyFormat = "SYX%s-%s-%s-%s"
-			upperCaseRandom := RandomStringUpperCase(3)
-			fiveUniqueRandom := RandomString(5)
-			tenUniqueRandom := RandomString(10)
-			uuidWithoutStrip := companyId
-			fmt.Println(fmt.Sprintf(apiKeyFormat, upperCaseRandom, fiveUniqueRandom, tenUniqueRandom, uuidWithoutStrip))
+			prefix := RandomStringUpperCase(3)
+			validationLayerOne := RandomString(5)
+			validationLayerTwo := RandomString(10)
+			result, err := authenticationService.GenerateAPIKeySentinel("SYX"+prefix, validationLayerOne, validationLayerTwo, accessToken)
+			if err != nil {
+				log.Fatalln(err.Error())
+			}
+			if result != nil {
+				if result.ResponseCode == "00" {
+					fmt.Println(fmt.Sprintf(apiKeyFormat, prefix, validationLayerOne, validationLayerTwo, companyId))
+				} else {
+					fmt.Println("API Key generate failed failed.")
+				}
+			}
 			return nil
 		},
 	})
