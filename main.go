@@ -6,17 +6,37 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang-jwt/jwt/v4"
+	guuid "github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"go.etcd.io/bbolt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 )
+
+func RandomString(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(b)
+}
+func RandomStringUpperCase(length int) string {
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(b)
+}
 
 type (
 	Storage interface {
@@ -245,6 +265,7 @@ var (
 )
 
 func init() {
+	rand.Seed(time.Now().UnixNano())
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "authenticate",
 		Short: "Authentication to create synexis account",
@@ -275,6 +296,13 @@ func init() {
 		Short: "Generate api key for accessing sentinel model",
 		Long:  `Generate api key for accessing sentinel model`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// SYX[3 alphabet uppercase]-[5 random]-[10 random unique string]-[uuid without strips]
+			const apiKeyFormat = "SYX%s-%s-%s-%s"
+			upperCaseRandom := RandomStringUpperCase(3)
+			fiveUniqueRandom := RandomString(5)
+			tenUniqueRandom := RandomString(10)
+			uuidWithoutStrip := strings.Replace(guuid.NewString(), "-", "", -1)
+			fmt.Println(fmt.Sprintf(apiKeyFormat, upperCaseRandom, fiveUniqueRandom, tenUniqueRandom, uuidWithoutStrip))
 			return nil
 		},
 	})
