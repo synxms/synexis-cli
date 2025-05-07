@@ -23,7 +23,7 @@ type (
 		GenerateLoginWithGoogle() (*LoginResponse, error)
 		GenerateAccessAndRefreshToken(refresh string) (*ResponseRefresh, error)
 		GenerateAPIKeySentinel(prefix, validationLayerOne, validationLayerTwo, access string) (*ResponseRefresh, error)
-		UploadFileDatasetSentinel(absoluteFile string) (*ResponseUploadDataset, error)
+		UploadFileDatasetSentinel(absoluteFile string, access string) (*ResponseUploadDataset, error)
 		OpenDefaultBrowser(url string) error
 		IsExpired(jwtString string) (*string, *string, error)
 	}
@@ -91,7 +91,7 @@ func (a *authentication) GenerateLoginWithGoogle() (*LoginResponse, error) {
 	return &loginResp, nil
 }
 
-func (a *authentication) UploadFileDatasetSentinel(absoluteFile string) (*ResponseUploadDataset, error) {
+func (a *authentication) UploadFileDatasetSentinel(absoluteFile string, access string) (*ResponseUploadDataset, error) {
 	file, err := os.Open(absoluteFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
@@ -122,7 +122,7 @@ func (a *authentication) UploadFileDatasetSentinel(absoluteFile string) (*Respon
 		return nil, errors.New("failed to create request")
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-
+	req.Header.Set("Authorization", "Bearer "+access)
 	// Send request
 	client := &http.Client{}
 	resp, err := client.Do(req)

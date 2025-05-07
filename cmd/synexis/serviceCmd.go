@@ -70,10 +70,15 @@ func uploadDatasetFile(cmd *cobra.Command, args []string) error {
 	// get base url
 	baseUrl, err := store.Get("base_url")
 	if err != nil {
+		log.Fatalln("Failed to get base url:", err)
+	}
+	// get access token
+	accessToken, err := store.Get("access_token")
+	if err != nil {
 		log.Fatalln("Failed to get access token:", err)
 	}
 	authenticationService := service.NewAuthentication(baseUrl)
-	result, err := authenticationService.UploadFileDatasetSentinel(args[0])
+	result, err := authenticationService.UploadFileDatasetSentinel(args[0], accessToken)
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
