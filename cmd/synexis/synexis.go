@@ -52,7 +52,7 @@ var (
 
 func Initialize() {
 	InitializeTokenCmd(tokenCmd)
-	InitializeTokenCmd(serviceCmd)
+	InitializeServiceCmd(serviceCmd)
 	rootCmd.AddCommand(authenticateCmd)
 	rootCmd.AddCommand(tokenCmd)
 	rootCmd.AddCommand(serviceCmd)

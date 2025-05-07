@@ -53,6 +53,7 @@ func generateAPIKey(_ *cobra.Command, _ []string) error {
 	}
 	return nil
 }
+
 func InitializeServiceCmd(serviceCmd *cobra.Command) {
 	sentinelCmd := &cobra.Command{
 		Use:   "sentinel",
