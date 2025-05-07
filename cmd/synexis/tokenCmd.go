@@ -73,7 +73,12 @@ func refreshToken(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		log.Fatalln("Failed to store access token:", err)
 	}
-	authenticationService := service.NewAuthentication()
+	// get base url
+	baseUrl, err := store.Get("base_url")
+	if err != nil {
+		log.Fatalln("Failed to get access token:", err)
+	}
+	authenticationService := service.NewAuthentication(baseUrl)
 	result, err := authenticationService.GenerateAccessAndRefreshToken(rt)
 	if err != nil {
 		log.Fatalln(err.Error())
@@ -109,7 +114,12 @@ func checkRefreshToken(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		log.Fatalln("Failed to store access token:", err)
 	}
-	authenticationService := service.NewAuthentication()
+	// get base url
+	baseUrl, err := store.Get("base_url")
+	if err != nil {
+		log.Fatalln("Failed to get access token:", err)
+	}
+	authenticationService := service.NewAuthentication(baseUrl)
 	refreshTokenRemaining, refreshTokenExpiredAt, err := authenticationService.IsExpired(rt)
 	if err != nil {
 		if errors.Is(err, errors.New("token is expired")) {
@@ -151,27 +161,27 @@ func InitializeTokenCmd(tokenCmd *cobra.Command) {
 		Long:  `Getter commands`,
 	}
 	tokenSetCmd.AddCommand(&cobra.Command{
-		Use:   "at [token]",
+		Use:   "accesstoken [token]",
 		Short: "Set new access token to local synexis command line tool",
 		Long:  `Set new access token to local synexis command line tool`,
 		Args:  cobra.ExactArgs(1),
 		RunE:  setAccessToken,
 	})
 	tokenSetCmd.AddCommand(&cobra.Command{
-		Use:   "rt [token]",
+		Use:   "refreshtoken [token]",
 		Short: "Set new refresh token to local synexis command line tool",
 		Long:  `Set new refresh token to local synexis command line tool`,
 		Args:  cobra.ExactArgs(1),
 		RunE:  setRefreshToken,
 	})
 	tokenGetCmd.AddCommand(&cobra.Command{
-		Use:   "at",
+		Use:   "accesstoken",
 		Short: "Get existing access token to local synexis command line tool",
 		Long:  `Get existing access token to local synexis command line tool`,
 		RunE:  getAccessToken,
 	})
 	tokenGetCmd.AddCommand(&cobra.Command{
-		Use:   "rt",
+		Use:   "refreshtoken",
 		Short: "Get existing refresh token to local synexis command line tool",
 		Long:  `Get existing refresh token to local synexis command line tool`,
 		RunE:  getRefreshToken,

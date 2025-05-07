@@ -12,16 +12,23 @@ import (
 )
 
 func generateAPIKey(_ *cobra.Command, _ []string) error {
-	authenticationService := service.NewAuthentication()
-	// get access token
 	store := storage.NewStorage()
 	if err := store.Init(); err != nil {
 		log.Fatalln("Failed to init storage:", err)
 	}
 	defer store.Close()
+
+	// get base url
+	baseUrl, err := store.Get("base_url")
+	if err != nil {
+		log.Fatalln("Failed to get access token:", err)
+	}
+	authenticationService := service.NewAuthentication(baseUrl)
+
+	// get access token
 	accessToken, err := store.Get("access_token")
 	if err != nil {
-		log.Fatalln("Failed to store access token:", err)
+		log.Fatalln("Failed to get access token:", err)
 	}
 
 	// retrieve company id

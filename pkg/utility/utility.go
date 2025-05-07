@@ -1,6 +1,9 @@
 package utility
 
-import "math/rand"
+import (
+	"math/rand"
+	"net/url"
+)
 
 func RandomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -17,4 +20,12 @@ func RandomStringUpperCase(length int) string {
 		b[i] = charset[rand.Intn(len(charset))]
 	}
 	return string(b)
+}
+
+func IsValidURL(str string) bool {
+	u, err := url.ParseRequestURI(str)
+	if err != nil {
+		return false
+	}
+	return u.Scheme != "" && u.Host != ""
 }

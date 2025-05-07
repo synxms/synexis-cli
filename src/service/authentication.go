@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/synexism/synexis/pkg/utility"
 	"io"
+	"log"
 	"net/http"
 	"os/exec"
 	"runtime"
@@ -40,8 +42,10 @@ type (
 	}
 )
 
-func NewAuthentication() Authentication {
-	const baseUrl = "http://localhost:2343"
+func NewAuthentication(baseUrl string) Authentication {
+	if !utility.IsValidURL(baseUrl) {
+		log.Fatalln("please provide base url before continue")
+	}
 	return &authentication{
 		contentTypeJsonHeader:  "application/json",
 		loginEndpoint:          fmt.Sprintf("%s/api/v1/authentication/login", baseUrl),
