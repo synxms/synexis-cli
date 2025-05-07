@@ -61,6 +61,33 @@ func generateAPIKey(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
+func uploadDatasetFile(cmd *cobra.Command, args []string) error {
+	store := storage.NewStorage()
+	if err := store.Init(); err != nil {
+		log.Fatalln("Failed to init storage:", err)
+	}
+	defer store.Close()
+	// get base url
+	baseUrl, err := store.Get("base_url")
+	if err != nil {
+		log.Fatalln("Failed to get access token:", err)
+	}
+	authenticationService := service.NewAuthentication(baseUrl)
+	result, err := authenticationService.UploadFileDatasetSentinel(args[0])
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+	if result != nil {
+		if result.ResponseCode == "00" {
+			fmt.Println("Upload dataset id successfully")
+			fmt.Println(result.Data.DatasetID)
+		} else {
+			fmt.Println("Upload dataset failed.")
+		}
+	}
+	return nil
+}
+
 func InitializeServiceCmd(serviceCmd *cobra.Command) {
 	sentinelCmd := &cobra.Command{
 		Use:   "sentinel",
@@ -77,6 +104,8 @@ func InitializeServiceCmd(serviceCmd *cobra.Command) {
 		Use:   "dataset",
 		Short: "Sentinel upload dataset for custom training",
 		Long:  `Sentinel upload dataset for custom training`,
+		Args:  cobra.ExactArgs(1),
+		RunE:  uploadDatasetFile,
 	})
 	serviceCmd.AddCommand(sentinelCmd)
 }
