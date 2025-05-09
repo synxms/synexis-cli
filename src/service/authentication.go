@@ -24,6 +24,7 @@ type (
 		GenerateAccessAndRefreshToken(refresh string) (*ResponseRefresh, error)
 		GenerateAPIKeySentinel(prefix, validationLayerOne, validationLayerTwo, access string) (*ResponseRefresh, error)
 		UploadFileDatasetSentinel(absoluteFile string, access string) (*ResponseUploadDataset, error)
+		UploadFileSensorySentinel(absoluteFile string, access string) (*ResponseUploadSensory, error)
 		OpenDefaultBrowser(url string) error
 		IsExpired(jwtString string) (*string, *string, error)
 	}
@@ -32,6 +33,7 @@ type (
 		refreshEndpoint           string
 		generateAPIKeyEndpoint    string
 		uploadDatasetFileEndpoint string
+		uploadSensoryFileEndpoint string
 		contentTypeJsonHeader     string
 	}
 	LoginResponse struct {
@@ -52,6 +54,13 @@ type (
 			DatasetID string `json:"dataset_id"`
 		} `json:"data"`
 	}
+	ResponseUploadSensory struct {
+		ResponseCode    string `json:"success"`
+		ResponseMessage string `json:"messages"`
+		Data            struct {
+			SensoryID string `json:"sensory_id"`
+		} `json:"data"`
+	}
 )
 
 func NewAuthentication(baseUrl string) Authentication {
@@ -64,6 +73,7 @@ func NewAuthentication(baseUrl string) Authentication {
 		refreshEndpoint:           fmt.Sprintf("%s/api/v1/authentication/refresh", baseUrl),
 		generateAPIKeyEndpoint:    fmt.Sprintf("%s/api/v1/authentication/create/apikey", baseUrl),
 		uploadDatasetFileEndpoint: fmt.Sprintf("%s/api/v1/sentinel/sessions/upload/dataset", baseUrl),
+		uploadSensoryFileEndpoint: fmt.Sprintf("%s/api/v1/sentinel/sessions/upload/sensory", baseUrl),
 	}
 }
 
@@ -137,6 +147,59 @@ func (a *authentication) UploadFileDatasetSentinel(absoluteFile string, access s
 
 	// Parse response
 	var uploadResp ResponseUploadDataset
+	if err := json.NewDecoder(resp.Body).Decode(&uploadResp); err != nil {
+		return nil, errors.New("failed to decode upload response")
+	}
+
+	return &uploadResp, nil
+}
+
+func (a *authentication) UploadFileSensorySentinel(absoluteFile string, access string) (*ResponseUploadSensory, error) {
+	file, err := os.Open(absoluteFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	// Prepare multipart form
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+
+	formFile, err := writer.CreateFormFile("file", filepath.Base(absoluteFile))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create form file: %w", err)
+	}
+
+	if _, err := io.Copy(formFile, file); err != nil {
+		return nil, fmt.Errorf("failed to write file to form: %w", err)
+	}
+
+	// Close writer to set the terminating boundary
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close multipart writer: %w", err)
+	}
+
+	// Create POST request
+	req, err := http.NewRequest("POST", a.uploadSensoryFileEndpoint, &buf)
+	if err != nil {
+		return nil, errors.New("failed to create request")
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer "+access)
+	// Send request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, errors.New("failed to contact server")
+	}
+	defer func(Body io.ReadCloser) {
+		if err := Body.Close(); err != nil {
+			panic("failed to close response body")
+		}
+	}(resp.Body)
+
+	// Parse response
+	var uploadResp ResponseUploadSensory
 	if err := json.NewDecoder(resp.Body).Decode(&uploadResp); err != nil {
 		return nil, errors.New("failed to decode upload response")
 	}
