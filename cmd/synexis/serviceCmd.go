@@ -88,6 +88,7 @@ func uploadDatasetFile(cmd *cobra.Command, args []string) error {
 			fmt.Println(result.Data.DatasetID)
 		} else {
 			fmt.Println("Upload dataset failed.")
+			fmt.Println("Upload dataset failed, reason : ", result.ResponseMessage)
 		}
 	}
 	return nil
