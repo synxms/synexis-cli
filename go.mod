@@ -1,10 +1,9 @@
-module github.com/synexism/synexis
+module github.com/synxms/synexis
 
 go 1.24.2
 
 require (
 	github.com/golang-jwt/jwt/v4 v4.5.2
-	github.com/google/uuid v1.6.0
 	github.com/spf13/cobra v1.9.1
 	go.etcd.io/bbolt v1.4.0
 )

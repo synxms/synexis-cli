@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/synexism/synexis/pkg/utility"
+	"github.com/synxms/synexis/pkg/utility"
 	"io"
 	"log"
 	"mime/multipart"

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/synexism/synexis/cmd/synexis"
+	"github.com/synxms/synexis/cmd/synexis"
 )
 
 func init() {

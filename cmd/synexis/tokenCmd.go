@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spf13/cobra"
-	"github.com/synexism/synexis/pkg/storage"
-	"github.com/synexism/synexis/src/service"
+	"github.com/synxms/synexis/pkg/storage"
+	"github.com/synxms/synexis/src/service"
 	"log"
 )
 
