@@ -9,6 +9,7 @@ import (
 	"github.com/synxms/synexis/pkg/utility"
 	"github.com/synxms/synexis/src/service"
 	"log"
+	"os"
 )
 
 func generateAPIKey(_ *cobra.Command, _ []string) error {
@@ -84,8 +85,16 @@ func uploadDatasetFile(cmd *cobra.Command, args []string) error {
 	}
 	if result != nil {
 		if result.ResponseCode == "00" {
-			fmt.Println("Upload dataset id successfully")
-			fmt.Println(result.Data.DatasetID)
+			outputPath, _ := cmd.Flags().GetString("output")
+			if outputPath != "" {
+				err := os.WriteFile(outputPath, []byte(result.Data.DatasetID), 0644)
+				if err != nil {
+					log.Fatalln("Failed to write dataset ID to file:", err)
+				}
+				fmt.Println("Dataset ID saved to", outputPath)
+			} else {
+				log.Fatalln("Use at the end '-o' to specify output file path")
+			}
 		} else {
 			fmt.Println("Upload dataset failed.")
 			fmt.Println("Upload dataset failed, reason : ", result.ResponseMessage)
@@ -117,8 +126,16 @@ func uploadSensoryFile(cmd *cobra.Command, args []string) error {
 	}
 	if result != nil {
 		if result.ResponseCode == "00" {
-			fmt.Println("Upload sensory id successfully")
-			fmt.Println(result.Data.SensoryID)
+			outputPath, _ := cmd.Flags().GetString("output")
+			if outputPath != "" {
+				err := os.WriteFile(outputPath, []byte(result.Data.SensoryID), 0644)
+				if err != nil {
+					log.Fatalln("Failed to write sensory ID to file:", err)
+				}
+				fmt.Println("Sensory ID saved to", outputPath)
+			} else {
+				log.Fatalln("Use at the end '-o' to specify output file path")
+			}
 		} else {
 			fmt.Println("Upload sensory failed.")
 			fmt.Println("Upload sensory failed, reason : ", result.ResponseMessage)
@@ -139,19 +156,24 @@ func InitializeServiceCmd(serviceCmd *cobra.Command) {
 		Long:  `Sentinel API Key generate be careful with this command`,
 		RunE:  generateAPIKey,
 	})
-	sentinelCmd.AddCommand(&cobra.Command{
+	datasetCmd := &cobra.Command{
 		Use:   "dataset",
 		Short: "Sentinel upload dataset for custom training",
 		Long:  `Sentinel upload dataset for custom training`,
 		Args:  cobra.ExactArgs(1),
 		RunE:  uploadDatasetFile,
-	})
-	sentinelCmd.AddCommand(&cobra.Command{
+	}
+	datasetCmd.Flags().StringP("output", "o", "", "Path to output file for saving DatasetID")
+	sentinelCmd.AddCommand(datasetCmd)
+	sensoryCmd := &cobra.Command{
 		Use:   "sensory",
 		Short: "Sentinel upload sensory configuration for custom training",
 		Long:  `Sentinel upload sensory configuration for custom training`,
 		Args:  cobra.ExactArgs(1),
 		RunE:  uploadSensoryFile,
-	})
+	}
+	sensoryCmd.Flags().StringP("output", "o", "", "Path to output file for saving SensoryID")
+	sentinelCmd.AddCommand(sensoryCmd)
+
 	serviceCmd.AddCommand(sentinelCmd)
 }
