@@ -25,6 +25,7 @@ type (
 		GenerateAPIKeySentinel(prefix, validationLayerOne, validationLayerTwo, access string) (*ResponseRefresh, error)
 		UploadFileDatasetSentinel(absoluteFile string, access string) (*ResponseUploadDataset, error)
 		UploadFileSensorySentinel(absoluteFile string, access string) (*ResponseUploadSensory, error)
+		CreateRequest(sensoryId string, datasetId string, access string) (*ResponseCreateRequest, error)
 		OpenDefaultBrowser(url string) error
 		IsExpired(jwtString string) (*string, *string, error)
 	}
@@ -34,6 +35,7 @@ type (
 		generateAPIKeyEndpoint    string
 		uploadDatasetFileEndpoint string
 		uploadSensoryFileEndpoint string
+		createRequestEndpoint     string
 		contentTypeJsonHeader     string
 	}
 	LoginResponse struct {
@@ -61,6 +63,13 @@ type (
 			SensoryID string `json:"sensory_id"`
 		} `json:"data"`
 	}
+	ResponseCreateRequest struct {
+		ResponseCode    string `json:"success"`
+		ResponseMessage string `json:"messages"`
+		Data            struct {
+			RequestID string `json:"request_id"`
+		} `json:"data"`
+	}
 )
 
 func NewAuthentication(baseUrl string) Authentication {
@@ -74,7 +83,40 @@ func NewAuthentication(baseUrl string) Authentication {
 		generateAPIKeyEndpoint:    fmt.Sprintf("%s/api/v1/authentication/create/apikey", baseUrl),
 		uploadDatasetFileEndpoint: fmt.Sprintf("%s/api/v1/sentinel/sessions/upload/dataset", baseUrl),
 		uploadSensoryFileEndpoint: fmt.Sprintf("%s/api/v1/sentinel/sessions/upload/sensory", baseUrl),
+		createRequestEndpoint:     fmt.Sprintf("%s/api/v1/sentinel/sessions/create/request", baseUrl),
 	}
+}
+
+func (a *authentication) CreateRequest(sensoryId string, datasetId string, access string) (*ResponseCreateRequest, error) {
+	dataRequest := map[string]interface{}{}
+	dataRequest["sensory_id"] = sensoryId
+	dataRequest["dataset_id"] = datasetId
+	dataRequestBytes, err := json.Marshal(dataRequest)
+	if err != nil {
+		return nil, errors.New("failed to marshal request")
+	}
+	req, err := http.NewRequest("POST", a.createRequestEndpoint, bytes.NewBuffer(dataRequestBytes))
+	if err != nil {
+		return nil, errors.New("failed to create request")
+	}
+	req.Header.Set("Content-Type", a.contentTypeJsonHeader)
+	req.Header.Set("Authorization", "Bearer "+access)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, errors.New("failed to contact server")
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			panic("failed to close response body")
+		}
+	}(resp.Body)
+	var createResponse ResponseCreateRequest
+	if err := json.NewDecoder(resp.Body).Decode(&createResponse); err != nil {
+		return nil, errors.New("failed to contact server")
+	}
+	return &createResponse, nil
 }
 
 func (a *authentication) GenerateLoginWithGoogle() (*LoginResponse, error) {
