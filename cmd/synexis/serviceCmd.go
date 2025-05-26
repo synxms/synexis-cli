@@ -57,7 +57,7 @@ func generateAPIKey(_ *cobra.Command, _ []string) error {
 		if result.ResponseCode == "00" {
 			fmt.Println(fmt.Sprintf(apiKeyFormat, prefix, validationLayerOne, validationLayerTwo, companyId))
 		} else {
-			fmt.Println("API Key generate failed failed.")
+			fmt.Println(result.ResponseMessage)
 		}
 	}
 	return nil
